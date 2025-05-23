@@ -51,7 +51,9 @@ function App() {
       let errorMessage = 'Authentication failed. ';
       
       if (axios.isAxiosError(error)) {
-        if (error.code === 'ECONNREFUSED') {
+        if (error.message === 'Network Error') {
+          errorMessage += 'Network error. Please check your internet connection and ensure the backend server is running at http://localhost:8000.';
+        } else if (error.code === 'ECONNREFUSED') {
           errorMessage += 'Cannot connect to server. Please ensure the backend server is running.';
         } else if (error.response) {
           errorMessage += `Server error: ${error.response.status}`;
