@@ -4,6 +4,7 @@ import { FiSend, FiUser } from 'react-icons/fi';
 import axios from 'axios';
 import { Message, ChatResponse, AuthResponse } from './types';
 
+// Update API URL to use the correct protocol (http instead of https)
 const API_URL = 'http://localhost:8000/api';
 const API_KEY = 'ishant';
 
@@ -14,6 +15,7 @@ function App() {
   const [input, setInput] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -27,12 +29,18 @@ function App() {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
+    
     try {
       const response = await axios.post<AuthResponse>(
         `${API_URL}/authenticate`,
         { customer_name: customerName, message: '' },
-        { headers: { 'X-API-Key': API_KEY } }
+        { 
+          headers: { 'X-API-Key': API_KEY },
+          timeout: 5000 // Add timeout to prevent hanging
+        }
       );
+      
       if (response.data.success) {
         setIsAuthenticated(true);
         setSuggestions(response.data.suggestions || []);
@@ -40,8 +48,26 @@ function App() {
       }
     } catch (error) {
       console.error('Authentication error:', error);
-      setMessages([{ role: 'assistant', content: 'Authentication failed. Please try again.' }]);
+      let errorMessage = 'Authentication failed. ';
+      
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNREFUSED') {
+          errorMessage += 'Cannot connect to server. Please ensure the backend server is running.';
+        } else if (error.response) {
+          errorMessage += `Server error: ${error.response.status}`;
+        } else if (error.request) {
+          errorMessage += 'No response from server. Please check your connection.';
+        } else {
+          errorMessage += error.message;
+        }
+      } else {
+        errorMessage += 'An unexpected error occurred.';
+      }
+      
+      setError(errorMessage);
+      setMessages([{ role: 'assistant', content: errorMessage }]);
     }
+    
     setIsLoading(false);
   };
 
@@ -52,19 +78,39 @@ function App() {
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
+    setError(null);
 
     try {
       const response = await axios.post<ChatResponse>(
         `${API_URL}/chat`,
         { customer_name: customerName, message: userMessage },
-        { headers: { 'X-API-Key': API_KEY } }
+        { 
+          headers: { 'X-API-Key': API_KEY },
+          timeout: 5000
+        }
       );
 
       setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
       setSuggestions(response.data.suggestions || []);
     } catch (error) {
       console.error('Chat error:', error);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' }]);
+      let errorMessage = 'Sorry, I encountered an error. ';
+      
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNREFUSED') {
+          errorMessage += 'Cannot connect to server. Please ensure the backend server is running.';
+        } else if (error.response) {
+          errorMessage += `Server error: ${error.response.status}`;
+        } else if (error.request) {
+          errorMessage += 'No response from server. Please check your connection.';
+        } else {
+          errorMessage += error.message;
+        }
+      } else {
+        errorMessage += 'An unexpected error occurred.';
+      }
+      
+      setMessages(prev => [...prev, { role: 'assistant', content: errorMessage }]);
     }
     setIsLoading(false);
   };
@@ -100,6 +146,11 @@ function App() {
                 required
               />
             </div>
+            {error && (
+              <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">
+                {error}
+              </div>
+            )}
             <button
               type="submit"
               disabled={isLoading}
